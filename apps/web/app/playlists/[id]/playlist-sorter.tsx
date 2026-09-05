@@ -1,0 +1,147 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import {
+  computeReorderMoves,
+  sortVideos,
+  REORDER_UPDATE_COST,
+  type SortableVideo,
+  type SortDirection,
+  type SortKey,
+} from "@ytsort/core";
+import { applyReorder } from "./actions";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "addedAt", label: "Date added" },
+  { key: "publishedAt", label: "Date published" },
+  { key: "viewCount", label: "View count" },
+  { key: "duration", label: "Duration" },
+];
+
+function formatDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return hours > 0
+    ? `${hours}:${pad(minutes)}:${pad(seconds)}`
+    : `${minutes}:${pad(seconds)}`;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+const numberFormatter = new Intl.NumberFormat();
+
+export function PlaylistSorter({
+  playlistId,
+  initialVideos,
+}: {
+  playlistId: string;
+  initialVideos: SortableVideo[];
+}) {
+  const [videos, setVideos] = useState(initialVideos);
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [direction, setDirection] = useState<SortDirection>("asc");
+  const [isPending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+
+  const sortedVideos = useMemo(
+    () => sortVideos(videos, sortKey, direction),
+    [videos, sortKey, direction],
+  );
+
+  const moves = useMemo(
+    () =>
+      computeReorderMoves(
+        videos.map((v) => v.playlistItemId),
+        sortedVideos.map((v) => v.playlistItemId),
+      ),
+    [videos, sortedVideos],
+  );
+
+  function handleApply() {
+    setMessage(null);
+    startTransition(async () => {
+      const targetOrder = sortedVideos.map((v) => v.playlistItemId);
+      const result = await applyReorder(playlistId, targetOrder);
+      setVideos(sortedVideos.map((v, i) => ({ ...v, position: i })));
+      setMessage(`Moved ${result.movedCount} video${result.movedCount === 1 ? "" : "s"}.`);
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          Sort by
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="rounded border border-black/[.08] bg-transparent px-2 py-1 dark:border-white/[.145]"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.key} value={opt.key}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <select
+          value={direction}
+          onChange={(e) => setDirection(e.target.value as SortDirection)}
+          className="rounded border border-black/[.08] bg-transparent px-2 py-1 text-sm dark:border-white/[.145]"
+        >
+          <option value="asc">Ascending</option>
+          <option value="desc">Descending</option>
+        </select>
+
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">
+            {moves.length === 0
+              ? "Already in this order"
+              : `${moves.length} of ${videos.length} will move (~${moves.length * REORDER_UPDATE_COST} quota units)`}
+          </span>
+          <button
+            onClick={handleApply}
+            disabled={moves.length === 0 || isPending}
+            className="rounded-full bg-foreground px-5 py-2 text-sm text-background transition-colors hover:bg-[#383838] disabled:opacity-40 dark:hover:bg-[#ccc]"
+          >
+            {isPending ? "Applying..." : "Apply sort"}
+          </button>
+        </div>
+      </div>
+
+      {message && <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
+
+      <ol className="flex flex-col divide-y divide-black/[.08] dark:divide-white/[.145]">
+        {sortedVideos.map((video, index) => (
+          <li key={video.playlistItemId} className="flex items-center gap-4 py-3">
+            <span className="w-6 shrink-0 text-right text-sm text-zinc-400">
+              {index + 1}
+            </span>
+            <span className="flex-1 truncate">{video.title}</span>
+            <span className="w-28 shrink-0 text-right text-sm text-zinc-500 dark:text-zinc-400">
+              {formatDate(video.addedAt)}
+            </span>
+            <span className="w-28 shrink-0 text-right text-sm text-zinc-500 dark:text-zinc-400">
+              {formatDate(video.publishedAt)}
+            </span>
+            <span className="w-20 shrink-0 text-right text-sm text-zinc-500 dark:text-zinc-400">
+              {numberFormatter.format(video.viewCount)} views
+            </span>
+            <span className="w-16 shrink-0 text-right text-sm text-zinc-500 dark:text-zinc-400">
+              {formatDuration(video.durationSeconds)}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}

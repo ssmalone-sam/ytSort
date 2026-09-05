@@ -1,0 +1,227 @@
+import type { TokenProvider } from "./auth-types";
+import type { PlaylistSummary, SortableVideo } from "./types";
+import { computeReorderMoves, type ReorderMove } from "./sort";
+
+const API_BASE = "https://www.googleapis.com/youtube/v3";
+const MAX_PAGE_SIZE = 50;
+const BATCH_SIZE = 50;
+
+/** Cost, in quota units, of a single playlistItems.update call. */
+export const REORDER_UPDATE_COST = 50;
+
+async function youtubeFetch(
+  tokens: TokenProvider,
+  path: string,
+  init: RequestInit = {},
+): Promise<unknown> {
+  const token = await tokens.getAccessToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...init.headers,
+      Authorization: `Bearer ${token}`,
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `YouTube API ${path} failed: ${res.status} ${res.statusText} ${body}`,
+    );
+  }
+  if (res.status === 204) return undefined;
+  return res.json();
+}
+
+async function paginate<TItem>(
+  tokens: TokenProvider,
+  path: string,
+  params: Record<string, string>,
+): Promise<TItem[]> {
+  const items: TItem[] = [];
+  let pageToken: string | undefined;
+  do {
+    const search = new URLSearchParams({
+      ...params,
+      maxResults: String(MAX_PAGE_SIZE),
+      ...(pageToken ? { pageToken } : {}),
+    });
+    const page = (await youtubeFetch(tokens, `${path}?${search}`)) as {
+      items: TItem[];
+      nextPageToken?: string;
+    };
+    items.push(...page.items);
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  return items;
+}
+
+interface RawPlaylist {
+  id: string;
+  snippet: {
+    title: string;
+    description: string;
+    channelId: string;
+    thumbnails?: { default?: { url: string } };
+  };
+  contentDetails: { itemCount: number };
+}
+
+/** Lists playlists owned by the signed-in channel (the only ones that can be reordered). */
+export async function listMyPlaylists(
+  tokens: TokenProvider,
+): Promise<PlaylistSummary[]> {
+  const raw = await paginate<RawPlaylist>(tokens, "/playlists", {
+    part: "snippet,contentDetails",
+    mine: "true",
+  });
+  return raw.map((p) => ({
+    id: p.id,
+    title: p.snippet.title,
+    description: p.snippet.description,
+    thumbnailUrl: p.snippet.thumbnails?.default?.url,
+    itemCount: p.contentDetails.itemCount,
+    isOwned: true,
+  }));
+}
+
+/** Fetches a single playlist's metadata (title, thumbnail, item count). */
+export async function getPlaylist(
+  tokens: TokenProvider,
+  playlistId: string,
+): Promise<PlaylistSummary | undefined> {
+  const raw = (await youtubeFetch(
+    tokens,
+    `/playlists?part=snippet,contentDetails&id=${playlistId}`,
+  )) as { items: RawPlaylist[] };
+  const p = raw.items[0];
+  if (!p) return undefined;
+  return {
+    id: p.id,
+    title: p.snippet.title,
+    description: p.snippet.description,
+    thumbnailUrl: p.snippet.thumbnails?.default?.url,
+    itemCount: p.contentDetails.itemCount,
+    isOwned: true,
+  };
+}
+
+interface RawPlaylistItem {
+  id: string;
+  snippet: {
+    title: string;
+    position: number;
+    publishedAt: string;
+    resourceId: { videoId: string };
+  };
+}
+
+interface RawVideo {
+  id: string;
+  snippet: { publishedAt: string };
+  contentDetails: { duration: string };
+  statistics: { viewCount?: string };
+}
+
+/** Parses an ISO 8601 duration (e.g. "PT1H2M10S") into whole seconds. */
+export function parseIsoDuration(duration: string): number {
+  const match = duration.match(
+    /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/,
+  );
+  if (!match) return 0;
+  const [, hours, minutes, seconds] = match;
+  return (
+    (Number(hours) || 0) * 3600 +
+    (Number(minutes) || 0) * 60 +
+    (Number(seconds) || 0)
+  );
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/**
+ * Loads every item in a playlist plus the video metadata (original publish
+ * date, duration, view count) needed to sort by criteria YouTube doesn't
+ * offer natively.
+ */
+export async function listPlaylistVideos(
+  tokens: TokenProvider,
+  playlistId: string,
+): Promise<SortableVideo[]> {
+  const items = await paginate<RawPlaylistItem>(tokens, "/playlistItems", {
+    part: "snippet",
+    playlistId,
+  });
+
+  const videoMeta = new Map<string, RawVideo>();
+  const videoIds = items.map((item) => item.snippet.resourceId.videoId);
+  for (const batch of chunk(videoIds, BATCH_SIZE)) {
+    const raw = (await youtubeFetch(
+      tokens,
+      `/videos?part=snippet,contentDetails,statistics&id=${batch.join(",")}`,
+    )) as { items: RawVideo[] };
+    for (const video of raw.items) {
+      videoMeta.set(video.id, video);
+    }
+  }
+
+  return items.map((item) => {
+    const videoId = item.snippet.resourceId.videoId;
+    const meta = videoMeta.get(videoId);
+    return {
+      playlistItemId: item.id,
+      videoId,
+      title: item.snippet.title,
+      position: item.snippet.position,
+      addedAt: item.snippet.publishedAt,
+      publishedAt: meta?.snippet.publishedAt ?? item.snippet.publishedAt,
+      durationSeconds: meta
+        ? parseIsoDuration(meta.contentDetails.duration)
+        : 0,
+      viewCount: Number(meta?.statistics.viewCount ?? 0),
+    };
+  });
+}
+
+/**
+ * Applies the minimal set of moves needed to turn the playlist's current
+ * order into `targetOrder` (a full list of playlistItem ids in the desired
+ * order). Returns the moves that were applied, in the order they were sent.
+ */
+export async function reorderPlaylist(
+  tokens: TokenProvider,
+  playlistId: string,
+  currentVideos: SortableVideo[],
+  targetOrder: string[],
+): Promise<ReorderMove[]> {
+  const videoIdByPlaylistItemId = new Map(
+    currentVideos.map((v) => [v.playlistItemId, v.videoId]),
+  );
+  const currentOrder = currentVideos.map((v) => v.playlistItemId);
+  const moves = computeReorderMoves(currentOrder, targetOrder);
+
+  for (const move of moves) {
+    const videoId = videoIdByPlaylistItemId.get(move.playlistItemId);
+    if (!videoId) {
+      throw new Error(`Unknown playlistItemId ${move.playlistItemId}`);
+    }
+    await youtubeFetch(tokens, "/playlistItems?part=snippet", {
+      method: "PUT",
+      body: JSON.stringify({
+        id: move.playlistItemId,
+        snippet: {
+          playlistId,
+          position: move.toPosition,
+          resourceId: { kind: "youtube#video", videoId },
+        },
+      }),
+    });
+  }
+  return moves;
+}
