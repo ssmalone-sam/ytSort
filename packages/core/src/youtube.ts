@@ -212,6 +212,26 @@ export async function listPlaylistVideos(
   });
 }
 
+async function putPlaylistItemPosition(
+  tokens: TokenProvider,
+  playlistId: string,
+  playlistItemId: string,
+  videoId: string,
+  position: number,
+): Promise<void> {
+  await youtubeFetch(tokens, "/playlistItems?part=snippet", {
+    method: "PUT",
+    body: JSON.stringify({
+      id: playlistItemId,
+      snippet: {
+        playlistId,
+        position,
+        resourceId: { kind: "youtube#video", videoId },
+      },
+    }),
+  });
+}
+
 /**
  * Applies the minimal set of moves needed to turn the playlist's current
  * order into `targetOrder` (a full list of playlistItem ids in the desired
@@ -234,17 +254,38 @@ export async function reorderPlaylist(
     if (!videoId) {
       throw new Error(`Unknown playlistItemId ${move.playlistItemId}`);
     }
-    await youtubeFetch(tokens, "/playlistItems?part=snippet", {
-      method: "PUT",
-      body: JSON.stringify({
-        id: move.playlistItemId,
-        snippet: {
-          playlistId,
-          position: move.toPosition,
-          resourceId: { kind: "youtube#video", videoId },
-        },
-      }),
-    });
+    await putPlaylistItemPosition(tokens, playlistId, move.playlistItemId, videoId, move.toPosition);
   }
   return moves;
+}
+
+/**
+ * Checks whether a playlist's "Sort by" is set to Manually on YouTube -
+ * the only mode that allows position-based reordering via the API. There's
+ * no field for this on the playlist resource, so the only way to find out
+ * is to attempt a real update; this re-applies a video's own current
+ * position, which is a no-op if it succeeds. Costs the same quota as one
+ * move (50 units), so callers should only invoke this once per playlist
+ * visit, not on every render.
+ */
+export async function isManualSortEnabled(
+  tokens: TokenProvider,
+  playlistId: string,
+  sampleVideo: SortableVideo,
+): Promise<boolean> {
+  try {
+    await putPlaylistItemPosition(
+      tokens,
+      playlistId,
+      sampleVideo.playlistItemId,
+      sampleVideo.videoId,
+      sampleVideo.position,
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof YouTubeApiError && error.reason === "manualSortRequired") {
+      return false;
+    }
+    throw error;
+  }
 }

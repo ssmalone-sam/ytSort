@@ -7,6 +7,7 @@ export {
   getPlaylist,
   listPlaylistVideos,
   reorderPlaylist,
+  isManualSortEnabled,
   parseIsoDuration,
   REORDER_UPDATE_COST,
   YouTubeApiError,

@@ -9,7 +9,7 @@ import {
   type SortDirection,
   type SortKey,
 } from "@ytsort/core";
-import { applyReorder } from "./actions";
+import { applyReorder, checkManualSort } from "./actions";
 
 type SortMode = "current" | SortKey;
 
@@ -55,6 +55,31 @@ export function PlaylistSorter({
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
+  // Whether this playlist's YouTube "Sort by" is set to Manually - the only
+  // mode the API can reorder. Checked lazily (costs quota) the first time a
+  // real sort is picked, then cached for the rest of this visit.
+  const [manualSort, setManualSort] = useState<
+    | { status: "unknown" | "checking" }
+    | { status: "enabled" }
+    | { status: "disabled"; message: string }
+  >({ status: "unknown" });
+  const [isCheckingSort, startCheckTransition] = useTransition();
+
+  function handleSortModeChange(mode: SortMode) {
+    setSortMode(mode);
+    if (mode !== "current" && manualSort.status === "unknown" && videos.length > 0) {
+      setManualSort({ status: "checking" });
+      startCheckTransition(async () => {
+        const result = await checkManualSort(playlistId, videos[0]);
+        setManualSort(
+          result.enabled
+            ? { status: "enabled" }
+            : { status: "disabled", message: result.message ?? "" },
+        );
+      });
+    }
+  }
+
   const sortedVideos = useMemo(
     () => (sortMode === "current" ? videos : sortVideos(videos, sortMode, direction)),
     [videos, sortMode, direction],
@@ -93,7 +118,7 @@ export function PlaylistSorter({
           Sort by
           <select
             value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            onChange={(e) => handleSortModeChange(e.target.value as SortMode)}
             className="rounded border border-black/[.08] bg-transparent px-2 py-1 dark:border-white/[.145]"
           >
             {SORT_OPTIONS.map((opt) => (
@@ -115,19 +140,35 @@ export function PlaylistSorter({
 
         <div className="ml-auto flex items-center gap-3">
           <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            {moves.length === 0
-              ? "Already in this order"
-              : `${moves.length} of ${videos.length} will move (~${moves.length * REORDER_UPDATE_COST} quota units)`}
+            {isCheckingSort
+              ? "Checking playlist's sort setting..."
+              : moves.length === 0
+                ? "Already in this order"
+                : `${moves.length} of ${videos.length} will move (~${moves.length * REORDER_UPDATE_COST} quota units)`}
           </span>
           <button
             onClick={handleApply}
-            disabled={moves.length === 0 || isPending}
+            disabled={moves.length === 0 || isPending || isCheckingSort || manualSort.status === "disabled"}
             className="rounded-full bg-foreground px-5 py-2 text-sm text-background transition-colors hover:bg-[#383838] disabled:opacity-40 dark:hover:bg-[#ccc]"
           >
             {isPending ? "Applying..." : "Apply sort"}
           </button>
         </div>
       </div>
+
+      {manualSort.status === "disabled" && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">
+          {manualSort.message}{" "}
+          <a
+            href={`https://www.youtube.com/playlist?list=${playlistId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            Open on YouTube
+          </a>
+        </p>
+      )}
 
       {message && (
         <p
