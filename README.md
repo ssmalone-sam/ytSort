@@ -22,7 +22,7 @@ duration - criteria YouTube itself won't let you sort by.
    otherwise required for this scope.
 4. Create an **OAuth Client ID** (Application type: Web application) with
    authorized redirect URI:
-   `http://localhost:3000/api/auth/callback/google`
+   `http://localhost:3007/api/auth/callback/google`
 5. Copy `apps/web/.env.local.example` to `apps/web/.env.local` and fill in:
    - `AUTH_SECRET` - generate with `npx auth secret`
    - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` - from the OAuth client you just created
@@ -34,24 +34,28 @@ npm install
 npm run dev
 ```
 
-Then open <http://localhost:3000> and sign in with a test-user Google
+Then open <http://localhost:3007> and sign in with a test-user Google
 account. Use "Switch account" in the header to work on a different
 Google/YouTube account.
 
 ## Accessing dev through a tunnel (e.g. Cloudflare Tunnel)
 
 If you're reaching the dev server through a public hostname (this project
-currently uses `ytsort.slashsam.net`) instead of `localhost:3000`, three
+currently uses `ytsort.slashsam.net`) instead of `localhost:3007`, four
 extra things need to line up:
 
-1. In the OAuth Client in Google Cloud Console, add
+1. Point the tunnel's local service at `http://localhost:3007` (e.g. in
+   `cloudflared`'s `config.yml`, or `cloudflared tunnel --url
+   http://localhost:3007` for a quick tunnel) - the dev server no longer
+   runs on the default port 3000.
+2. In the OAuth Client in Google Cloud Console, add
    `https://ytsort.slashsam.net/api/auth/callback/google` as an additional
    Authorized redirect URI, and `https://ytsort.slashsam.net` as an
    Authorized JavaScript origin. You can keep the `localhost` ones too.
-2. On the OAuth consent screen, add `slashsam.net` under **Authorized
+3. On the OAuth consent screen, add `slashsam.net` under **Authorized
    domains** if it isn't listed already - Google checks the redirect URI's
    domain against this list even in Testing mode.
-3. Set `AUTH_URL=https://ytsort.slashsam.net` in `apps/web/.env.local` (see
+4. Set `AUTH_URL=https://ytsort.slashsam.net` in `apps/web/.env.local` (see
    `.env.local.example`) so Auth.js builds callback URLs and cookies against
    the public URL rather than guessing from request headers. `next.config.ts`
    already allow-lists the tunnel hostname via `allowedDevOrigins`, which
