@@ -67,7 +67,7 @@ export function PlaylistSorter({
 
   function handleSortModeChange(mode: SortMode) {
     setSortMode(mode);
-    if (mode !== "current" && manualSort.status === "unknown" && videos.length > 0) {
+    if (mode !== "current" && manualSort.status === "unknown" && videos.length > 1) {
       setManualSort({ status: "checking" });
       startCheckTransition(async () => {
         const result = await checkManualSort(playlistId, videos[0]);

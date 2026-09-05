@@ -263,29 +263,42 @@ export async function reorderPlaylist(
  * Checks whether a playlist's "Sort by" is set to Manually on YouTube -
  * the only mode that allows position-based reordering via the API. There's
  * no field for this on the playlist resource, so the only way to find out
- * is to attempt a real update; this re-applies a video's own current
- * position, which is a no-op if it succeeds. Costs the same quota as one
- * move (50 units), so callers should only invoke this once per playlist
- * visit, not on every render.
+ * is to attempt a real update. Re-applying a video's own current position
+ * doesn't work as a test: YouTube treats that as a no-op and accepts it
+ * without ever validating the sort-order constraint, so this requests an
+ * actually different position (a neighboring slot) and, if that succeeds,
+ * immediately moves it back so the check doesn't itself change the order.
+ * That means it costs 50 quota units when Manual sort is off (the first
+ * call fails, nothing to revert) but 100 when it's on (move + move back) -
+ * callers should only invoke this once per playlist visit, not on every
+ * render, and only when the playlist has at least 2 videos to test with.
  */
 export async function isManualSortEnabled(
   tokens: TokenProvider,
   playlistId: string,
   sampleVideo: SortableVideo,
 ): Promise<boolean> {
+  const testPosition = sampleVideo.position === 0 ? 1 : sampleVideo.position - 1;
   try {
     await putPlaylistItemPosition(
       tokens,
       playlistId,
       sampleVideo.playlistItemId,
       sampleVideo.videoId,
-      sampleVideo.position,
+      testPosition,
     );
-    return true;
   } catch (error) {
     if (error instanceof YouTubeApiError && error.reason === "manualSortRequired") {
       return false;
     }
     throw error;
   }
+  await putPlaylistItemPosition(
+    tokens,
+    playlistId,
+    sampleVideo.playlistItemId,
+    sampleVideo.videoId,
+    sampleVideo.position,
+  );
+  return true;
 }

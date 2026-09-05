@@ -19,9 +19,10 @@ export type ApplyReorderResult =
 /**
  * Checks up front whether this playlist accepts position-based reordering,
  * so the UI can warn before the user picks moves apart, rather than only
- * finding out when they click Apply. Costs the same quota as one move
- * (50 units) since there's no cheaper way to read this setting - callers
- * should only call this once per playlist visit.
+ * finding out when they click Apply. There's no cheaper way to read this
+ * setting - costs 50 quota units if Manual sort is off, 100 if it's on
+ * (see isManualSortEnabled) - so callers should only call this once per
+ * playlist visit, and only when there are at least 2 videos to test with.
  */
 export async function checkManualSort(
   playlistId: string,
