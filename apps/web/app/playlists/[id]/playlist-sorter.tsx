@@ -157,7 +157,7 @@ export function PlaylistSorter({
       </div>
 
       {manualSort.status === "disabled" && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-400/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-950/40 dark:text-amber-200">
+        <div className="flex items-start gap-3 rounded-lg border-2 border-yellow-400 bg-yellow-100 px-4 py-3 text-sm text-yellow-900 dark:border-yellow-500 dark:bg-yellow-900/60 dark:text-yellow-100">
           <span aria-hidden className="text-base leading-none">⚠️</span>
           <p>
             {manualSort.message}{" "}
