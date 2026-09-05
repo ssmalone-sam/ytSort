@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPlaylist, listPlaylistVideos } from "@ytsort/core";
 import { getServerTokenProvider } from "@/lib/token-provider";
@@ -23,6 +24,12 @@ export default async function PlaylistPage({
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <div>
+        <Link
+          href="/playlists"
+          className="text-sm text-zinc-500 hover:underline dark:text-zinc-400"
+        >
+          ← All playlists
+        </Link>
         <h1 className="text-2xl font-semibold tracking-tight">{playlist.title}</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {videos.length} video{videos.length === 1 ? "" : "s"}

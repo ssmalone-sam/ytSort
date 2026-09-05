@@ -11,7 +11,10 @@ import {
 } from "@ytsort/core";
 import { applyReorder } from "./actions";
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+type SortMode = "current" | SortKey;
+
+const SORT_OPTIONS: { key: SortMode; label: string }[] = [
+  { key: "current", label: "Current order" },
   { key: "name", label: "Name" },
   { key: "addedAt", label: "Date added" },
   { key: "publishedAt", label: "Date published" },
@@ -47,14 +50,14 @@ export function PlaylistSorter({
   initialVideos: SortableVideo[];
 }) {
   const [videos, setVideos] = useState(initialVideos);
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortMode, setSortMode] = useState<SortMode>("current");
   const [direction, setDirection] = useState<SortDirection>("asc");
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
   const sortedVideos = useMemo(
-    () => sortVideos(videos, sortKey, direction),
-    [videos, sortKey, direction],
+    () => (sortMode === "current" ? videos : sortVideos(videos, sortMode, direction)),
+    [videos, sortMode, direction],
   );
 
   const moves = useMemo(
@@ -89,8 +92,8 @@ export function PlaylistSorter({
         <label className="flex items-center gap-2 text-sm">
           Sort by
           <select
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
             className="rounded border border-black/[.08] bg-transparent px-2 py-1 dark:border-white/[.145]"
           >
             {SORT_OPTIONS.map((opt) => (
@@ -103,7 +106,8 @@ export function PlaylistSorter({
         <select
           value={direction}
           onChange={(e) => setDirection(e.target.value as SortDirection)}
-          className="rounded border border-black/[.08] bg-transparent px-2 py-1 text-sm dark:border-white/[.145]"
+          disabled={sortMode === "current"}
+          className="rounded border border-black/[.08] bg-transparent px-2 py-1 text-sm disabled:opacity-40 dark:border-white/[.145]"
         >
           <option value="asc">Ascending</option>
           <option value="desc">Descending</option>
