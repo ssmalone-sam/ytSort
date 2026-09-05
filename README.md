@@ -38,6 +38,29 @@ Then open <http://localhost:3000> and sign in with a test-user Google
 account. Use "Switch account" in the header to work on a different
 Google/YouTube account.
 
+## Accessing dev through a tunnel (e.g. Cloudflare Tunnel)
+
+If you're reaching the dev server through a public hostname (this project
+currently uses `ytsort.slashsam.net`) instead of `localhost:3000`, three
+extra things need to line up:
+
+1. In the OAuth Client in Google Cloud Console, add
+   `https://ytsort.slashsam.net/api/auth/callback/google` as an additional
+   Authorized redirect URI, and `https://ytsort.slashsam.net` as an
+   Authorized JavaScript origin. You can keep the `localhost` ones too.
+2. On the OAuth consent screen, add `slashsam.net` under **Authorized
+   domains** if it isn't listed already - Google checks the redirect URI's
+   domain against this list even in Testing mode.
+3. Set `AUTH_URL=https://ytsort.slashsam.net` in `apps/web/.env.local` (see
+   `.env.local.example`) so Auth.js builds callback URLs and cookies against
+   the public URL rather than guessing from request headers. `next.config.ts`
+   already allow-lists the tunnel hostname via `allowedDevOrigins`, which
+   Next.js otherwise requires for any dev-server origin besides `localhost`.
+
+Anyone who finds that URL while the tunnel is up can load the app's
+pre-login pages, though only accounts you've added as test users can
+actually complete sign-in.
+
 ## Running the core package's tests
 
 ```bash
