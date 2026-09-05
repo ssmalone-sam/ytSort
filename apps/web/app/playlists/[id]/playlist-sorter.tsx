@@ -157,17 +157,20 @@ export function PlaylistSorter({
       </div>
 
       {manualSort.status === "disabled" && (
-        <p className="text-sm text-amber-600 dark:text-amber-400">
-          {manualSort.message}{" "}
-          <a
-            href={`https://www.youtube.com/playlist?list=${playlistId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline"
-          >
-            Open on YouTube
-          </a>
-        </p>
+        <div className="flex items-start gap-3 rounded-lg border border-amber-400/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-950/40 dark:text-amber-200">
+          <span aria-hidden className="text-base leading-none">⚠️</span>
+          <p>
+            {manualSort.message}{" "}
+            <a
+              href={`https://www.youtube.com/playlist?list=${playlistId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium underline"
+            >
+              Open on YouTube
+            </a>
+          </p>
+        </div>
       )}
 
       {message && (
