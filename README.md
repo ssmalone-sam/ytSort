@@ -24,7 +24,8 @@ duration - criteria YouTube itself won't let you sort by.
    authorized redirect URI:
    `http://localhost:3007/api/auth/callback/google`
 5. Copy `apps/web/.env.local.example` to `apps/web/.env.local` and fill in:
-   - `AUTH_SECRET` - generate with `npx auth secret`
+   - `AUTH_SECRET` - generate with `openssl rand -base64 32` (`npx auth secret`
+     now resolves to an unrelated `better-auth` CLI, not Auth.js's - don't use it)
    - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` - from the OAuth client you just created
 
 ## Running it
