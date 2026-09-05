@@ -9,4 +9,5 @@ export {
   reorderPlaylist,
   parseIsoDuration,
   REORDER_UPDATE_COST,
+  YouTubeApiError,
 } from "./youtube";

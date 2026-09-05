@@ -9,6 +9,18 @@ const BATCH_SIZE = 50;
 /** Cost, in quota units, of a single playlistItems.update call. */
 export const REORDER_UPDATE_COST = 50;
 
+/** A non-2xx response from the YouTube API, with the reason code YouTube gave (if any). */
+export class YouTubeApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly reason?: string,
+  ) {
+    super(message);
+    this.name = "YouTubeApiError";
+  }
+}
+
 async function youtubeFetch(
   tokens: TokenProvider,
   path: string,
@@ -24,9 +36,20 @@ async function youtubeFetch(
     },
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(
-      `YouTube API ${path} failed: ${res.status} ${res.statusText} ${body}`,
+    const bodyText = await res.text().catch(() => "");
+    const reason = (() => {
+      try {
+        return JSON.parse(bodyText)?.error?.errors?.[0]?.reason as
+          | string
+          | undefined;
+      } catch {
+        return undefined;
+      }
+    })();
+    throw new YouTubeApiError(
+      `YouTube API ${path} failed: ${res.status} ${res.statusText} ${bodyText}`,
+      res.status,
+      reason,
     );
   }
   if (res.status === 204) return undefined;

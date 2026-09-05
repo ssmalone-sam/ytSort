@@ -50,7 +50,7 @@ export function PlaylistSorter({
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [direction, setDirection] = useState<SortDirection>("asc");
   const [isPending, startTransition] = useTransition();
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
   const sortedVideos = useMemo(
     () => sortVideos(videos, sortKey, direction),
@@ -71,8 +71,15 @@ export function PlaylistSorter({
     startTransition(async () => {
       const targetOrder = sortedVideos.map((v) => v.playlistItemId);
       const result = await applyReorder(playlistId, targetOrder);
+      if (!result.ok) {
+        setMessage({ text: result.message, isError: true });
+        return;
+      }
       setVideos(sortedVideos.map((v, i) => ({ ...v, position: i })));
-      setMessage(`Moved ${result.movedCount} video${result.movedCount === 1 ? "" : "s"}.`);
+      setMessage({
+        text: `Moved ${result.movedCount} video${result.movedCount === 1 ? "" : "s"}.`,
+        isError: false,
+      });
     });
   }
 
@@ -118,7 +125,27 @@ export function PlaylistSorter({
         </div>
       </div>
 
-      {message && <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
+      {message && (
+        <p
+          className={`text-sm ${
+            message.isError
+              ? "text-red-600 dark:text-red-400"
+              : "text-emerald-600 dark:text-emerald-400"
+          }`}
+        >
+          {message.text}{" "}
+          {message.isError && (
+            <a
+              href={`https://www.youtube.com/playlist?list=${playlistId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              Open on YouTube
+            </a>
+          )}
+        </p>
+      )}
 
       <ol className="flex flex-col divide-y divide-black/[.08] dark:divide-white/[.145]">
         {sortedVideos.map((video, index) => (
