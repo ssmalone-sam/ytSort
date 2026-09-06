@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { formatCountdown, msUntilNextPacificMidnight } from "@/lib/quota-reset";
 
 export default function PlaylistsError({
   error,
@@ -19,6 +20,20 @@ export default function PlaylistsError({
   // Good enough for now since this app isn't deployed anywhere else yet.
   const isQuotaExceeded = error.message.includes("quotaExceeded");
 
+  // Starts null (rather than computing eagerly) so the client's first
+  // render matches what the server would have rendered - it fills in a
+  // tick after mount and then updates every second.
+  const [msRemaining, setMsRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isQuotaExceeded) return;
+    setMsRemaining(msUntilNextPacificMidnight());
+    const interval = setInterval(() => {
+      setMsRemaining(msUntilNextPacificMidnight());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isQuotaExceeded]);
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4 px-6 py-16 text-center">
       <h1 className="text-xl font-semibold">
@@ -29,6 +44,16 @@ export default function PlaylistsError({
           ? "Your Google Cloud project has used its daily allotment of YouTube API quota (10,000 units by default). It resets automatically at midnight Pacific Time - no action needed, just try again after that."
           : `An error occurred while talking to the YouTube API: ${error.message}`}
       </p>
+      {isQuotaExceeded && msRemaining !== null && (
+        <div className="flex flex-col items-center gap-1">
+          <span className="font-mono text-3xl tabular-nums">
+            {formatCountdown(msRemaining)}
+          </span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            until quota resets (midnight Pacific Time)
+          </span>
+        </div>
+      )}
       <div className="flex gap-3">
         <button
           onClick={reset}
