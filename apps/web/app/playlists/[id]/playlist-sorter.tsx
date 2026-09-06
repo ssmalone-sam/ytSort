@@ -58,8 +58,10 @@ export function PlaylistSorter({
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
   // Whether this playlist's YouTube "Sort by" is set to Manually - the only
-  // mode the API can reorder. Checked lazily (costs quota) the first time a
-  // real sort is picked, then cached for the rest of this visit.
+  // mode the API can reorder. There's no free way to read this from the
+  // API, so the check itself costs real quota (50-100 units) - left as an
+  // opt-in button rather than running automatically, so picking a sort
+  // mode to preview never silently spends quota on its own.
   const [manualSort, setManualSort] = useState<
     | { status: "unknown" | "checking" }
     | { status: "enabled" }
@@ -67,19 +69,17 @@ export function PlaylistSorter({
   >({ status: "unknown" });
   const [isCheckingSort, startCheckTransition] = useTransition();
 
-  function handleSortModeChange(mode: SortMode) {
-    setSortMode(mode);
-    if (mode !== "current" && manualSort.status === "unknown" && videos.length > 1) {
-      setManualSort({ status: "checking" });
-      startCheckTransition(async () => {
-        const result = await checkManualSort(playlistId, videos[0]);
-        setManualSort(
-          result.enabled
-            ? { status: "enabled" }
-            : { status: "disabled", message: result.message ?? "" },
-        );
-      });
-    }
+  function runManualSortCheck() {
+    if (videos.length < 2) return;
+    setManualSort({ status: "checking" });
+    startCheckTransition(async () => {
+      const result = await checkManualSort(playlistId, videos[0]);
+      setManualSort(
+        result.enabled
+          ? { status: "enabled" }
+          : { status: "disabled", message: result.message ?? "" },
+      );
+    });
   }
 
   const sortedVideos = useMemo(
@@ -166,7 +166,7 @@ export function PlaylistSorter({
           Sort by
           <select
             value={sortMode}
-            onChange={(e) => handleSortModeChange(e.target.value as SortMode)}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
             className="rounded border border-black/[.08] bg-transparent px-2 py-1 dark:border-white/[.145]"
           >
             {SORT_OPTIONS.map((opt) => (
@@ -203,6 +203,24 @@ export function PlaylistSorter({
           </button>
         </div>
       </div>
+
+      {sortMode !== "current" &&
+        (manualSort.status === "unknown" || manualSort.status === "checking") && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-black/[.08] px-4 py-2 text-sm dark:border-white/[.145]">
+            <span className="text-zinc-500 dark:text-zinc-400">
+              Not sure whether this playlist allows reordering? YouTube doesn&apos;t expose that
+              setting directly, so checking costs 50-100 quota units (one-time per visit) - Apply
+              works fine without checking first, it&apos;ll just tell you afterward if it can&apos;t.
+            </span>
+            <button
+              onClick={runManualSortCheck}
+              disabled={isCheckingSort}
+              className="ml-auto shrink-0 rounded-full border border-black/[.08] px-3 py-1 text-xs transition-colors hover:bg-black/[.04] disabled:opacity-40 dark:border-white/[.145] dark:hover:bg-[#1a1a1a]"
+            >
+              {isCheckingSort ? "Checking..." : "Check now"}
+            </button>
+          </div>
+        )}
 
       {sortMode === "name" && (
         <div className="flex flex-col gap-2 rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
