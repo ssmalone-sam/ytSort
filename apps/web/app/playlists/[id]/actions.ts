@@ -4,6 +4,7 @@ import {
   listPlaylistVideos,
   reorderPlaylist,
   isManualSortEnabled,
+  updateVideoTitle,
   YouTubeApiError,
   type SortableVideo,
 } from "@ytsort/core";
@@ -37,6 +38,47 @@ export async function checkManualSort(
     // surface the real error if there is one.
     return { enabled: true };
   }
+}
+
+export interface BatchRenameFailure {
+  videoId: string;
+  oldTitle: string;
+  message: string;
+}
+
+export interface BatchRenameResult {
+  succeededVideoIds: string[];
+  failed: BatchRenameFailure[];
+}
+
+/**
+ * Applies a batch of title changes (from a regex find/replace preview) one
+ * at a time, editing each video's actual title on YouTube. Keeps going
+ * past individual failures (e.g. a video in the playlist that isn't yours
+ * to edit) instead of aborting the whole batch, and reports both lists so
+ * the UI can show exactly what happened.
+ */
+export async function applyRegexRename(
+  changes: { videoId: string; oldTitle: string; newTitle: string }[],
+): Promise<BatchRenameResult> {
+  const tokens = await getServerTokenProvider();
+  const succeededVideoIds: string[] = [];
+  const failed: BatchRenameFailure[] = [];
+
+  for (const change of changes) {
+    try {
+      await updateVideoTitle(tokens, change.videoId, change.newTitle);
+      succeededVideoIds.push(change.videoId);
+    } catch (error) {
+      failed.push({
+        videoId: change.videoId,
+        oldTitle: change.oldTitle,
+        message: error instanceof Error ? error.message : "Failed to rename video.",
+      });
+    }
+  }
+
+  return { succeededVideoIds, failed };
 }
 
 /**
