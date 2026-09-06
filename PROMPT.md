@@ -13,12 +13,14 @@ see git-ignored `.env.local` for actual values.
 
 ### 1. Initial app proposal
 **Working on:** Starting from an empty repo.
+
 **Prompt:** "I would like to build a small app that allows a user to sort a youtube playlist in different ways that are not necessarily allowed by YouTube or YouTube Studio. The user should be able to login into YouTube, switch to the desired account, pick a playlist, and then pick the sort method. The sort needs to include by name, added date, created date, etc. How would you propose this to be created?"
 
 **Outcome:** Entered plan mode; asked clarifying questions (platform, audience/OAuth verification tradeoffs, sort criteria to launch with); drafted an initial architecture plan.
 
 ### 2. Future Electron/iOS reuse
 **Working on:** Refining the plan before approval.
+
 **Prompt:** "while this will start as a web app, make sure this could also have a electron and ios abiliyt later on."
 
 **Outcome:** Redesigned the plan around a monorepo (`packages/core` framework-agnostic logic + `apps/web`), so a future Electron or React Native app could reuse the YouTube API/sort logic without a rewrite. Plan approved; scaffolded the whole project (Next.js + Auth.js, `packages/core` with the sort/diff algorithm, tests, README).
@@ -40,6 +42,7 @@ see git-ignored `.env.local` for actual values.
 
 ### 6. Cloudflare tunnel / Google settings
 **Working on:** Accessing the local dev server from a public URL.
+
 **Prompt:** "I'm going to be access this via cloud flare on the foloowing URL for local dev test: ytsort.slashsam.net how does this affect teh google settings?"
 
 **Outcome:** Explained the required Google Cloud Console changes (redirect URI, JS origin, authorized domain) and added `allowedDevOrigins` + optional `AUTH_URL` support in the app; documented both in the README.
@@ -61,6 +64,7 @@ see git-ignored `.env.local` for actual values.
 
 ### 10. `org_internal` sign-in error
 **Working on:** First real sign-in attempt.
+
 **Prompt:** "I'm getting this error on a youtube account hat I have access to: Access blocked: ytSort-dev can only be used within its organization ... Error 403: org_internal"
 
 **Outcome:** Diagnosed the OAuth consent screen's User Type being set to Internal (restricted to a Workspace org) instead of External; gave the fix steps (switch to External, add test users).
@@ -77,6 +81,7 @@ see git-ignored `.env.local` for actual values.
 
 ### 13. `manualSortRequired` error
 **Working on:** First attempt to apply a sort.
+
 **Prompt:** "I'm in, trying to apply a sort I get this: ... 400 Bad Request ... Playlist sort type need to be MANUAL to support position. ..."
 
 **Outcome:** Explained that a playlist's YouTube "Sort by" must be set to Manually before the API allows position-based reordering (a UI-only setting, not readable/writable via the Data API). Then proactively improved error handling: a `YouTubeApiError` class carrying the API's reason code, a typed result from the reorder server action, and a UI message with a link to fix it on YouTube.
@@ -108,6 +113,7 @@ see git-ignored `.env.local` for actual values.
 
 ### 19. "I don't see any yellow"
 **Working on:** Testing the warning box on a playlist not set to Manual sort.
+
 **Prompt:** "I don't see any yellow" (clarified: picked a real sort mode on a playlist not yet set to Manual, and the warning still didn't appear)
 
 **Outcome:** Found the real bug: the check re-applied a video's own current position as a "safe" test, which YouTube accepts as a no-op without ever validating the sort-order constraint - always reporting "enabled" regardless of the real setting. Fixed it to request a genuinely different position and revert it afterward, which actually exercises the check.
@@ -139,6 +145,7 @@ see git-ignored `.env.local` for actual values.
 
 ### 25. Regex-based batch rename
 **Working on:** A real, scoped version of the renaming idea.
+
 **Prompt:** "ok, what I would like the ability to change the name of video in a playlist based off a regex when the sort type is choosen as by name. An example of what I'm want that to do is be able to change the beginning of a file name from (1) to (01)"
 
 **Outcome:** Added a find/replace regex panel shown only in Name sort mode: `previewRegexRename` (pure, unit-tested, no network calls while typing) for a live preview of every title that would change, plus an `applyRegexRename` server action that renames matched videos one at a time, tolerating individual failures.
