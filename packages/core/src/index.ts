@@ -8,7 +8,6 @@ export {
   listPlaylistVideos,
   reorderPlaylist,
   isManualSortEnabled,
-  updateVideoTitle,
   parseIsoDuration,
   REORDER_UPDATE_COST,
   YouTubeApiError,
