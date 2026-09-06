@@ -4,6 +4,7 @@ import {
   listPlaylistVideos,
   reorderPlaylist,
   isManualSortEnabled,
+  updateVideoTitle,
   YouTubeApiError,
   type SortableVideo,
 } from "@ytsort/core";
@@ -36,6 +37,29 @@ export async function checkManualSort(
     // Don't block the user over an unrelated failure here - Apply will
     // surface the real error if there is one.
     return { enabled: true };
+  }
+}
+
+export type RenameVideoResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * Renames a video by editing its title on YouTube directly - this changes
+ * the actual video, not just how it appears in this playlist, so it'll
+ * show up everywhere else that video is used too.
+ */
+export async function renameVideo(
+  videoId: string,
+  newTitle: string,
+): Promise<RenameVideoResult> {
+  const tokens = await getServerTokenProvider();
+  try {
+    await updateVideoTitle(tokens, videoId, newTitle);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Failed to rename video.",
+    };
   }
 }
 

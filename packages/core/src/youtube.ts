@@ -302,3 +302,38 @@ export async function isManualSortEnabled(
   );
   return true;
 }
+
+interface RawVideoSnippet {
+  title: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Renames a video by editing its actual title on YouTube - this isn't a
+ * per-playlist label (YouTube doesn't have those), so it changes the
+ * video everywhere it appears, not just in the playlist it was renamed
+ * from. videos.update requires the full snippet object back, not just the
+ * changed field, so this re-fetches it first (1 unit) before writing the
+ * new title (50 units).
+ */
+export async function updateVideoTitle(
+  tokens: TokenProvider,
+  videoId: string,
+  newTitle: string,
+): Promise<void> {
+  const raw = (await youtubeFetch(tokens, `/videos?part=snippet&id=${videoId}`)) as {
+    items: { id: string; snippet: RawVideoSnippet }[];
+  };
+  const video = raw.items[0];
+  if (!video) {
+    throw new Error(`Video ${videoId} not found`);
+  }
+
+  await youtubeFetch(tokens, "/videos?part=snippet", {
+    method: "PUT",
+    body: JSON.stringify({
+      id: videoId,
+      snippet: { ...video.snippet, title: newTitle },
+    }),
+  });
+}

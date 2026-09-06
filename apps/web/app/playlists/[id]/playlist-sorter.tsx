@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   computeReorderMoves,
   sortVideos,
@@ -9,7 +9,7 @@ import {
   type SortDirection,
   type SortKey,
 } from "@ytsort/core";
-import { applyReorder, checkManualSort } from "./actions";
+import { applyReorder, checkManualSort, renameVideo } from "./actions";
 
 type SortMode = "current" | SortKey;
 
@@ -93,6 +93,48 @@ export function PlaylistSorter({
       ),
     [videos, sortedVideos],
   );
+
+  // Renaming edits the video's actual title on YouTube, not just how it
+  // shows up here, so it applies everywhere that video appears.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [renamingVideoId, setRenamingVideoId] = useState<string | null>(null);
+  const [, startRenameTransition] = useTransition();
+  const suppressBlurRef = useRef(false);
+
+  function startEditingTitle(video: SortableVideo) {
+    setEditingId(video.playlistItemId);
+    setDraftTitle(video.title);
+  }
+
+  function cancelEditingTitle(video: SortableVideo) {
+    suppressBlurRef.current = true;
+    setDraftTitle(video.title);
+    setEditingId(null);
+  }
+
+  function submitRename(video: SortableVideo) {
+    if (suppressBlurRef.current) {
+      suppressBlurRef.current = false;
+      return;
+    }
+    const trimmed = draftTitle.trim();
+    setEditingId(null);
+    if (!trimmed || trimmed === video.title) return;
+
+    setRenamingVideoId(video.videoId);
+    startRenameTransition(async () => {
+      const result = await renameVideo(video.videoId, trimmed);
+      setRenamingVideoId(null);
+      if (!result.ok) {
+        setMessage({ text: result.message, isError: true });
+        return;
+      }
+      setVideos((prev) =>
+        prev.map((v) => (v.videoId === video.videoId ? { ...v, title: trimmed } : v)),
+      );
+    });
+  }
 
   function handleApply() {
     setMessage(null);
@@ -201,7 +243,38 @@ export function PlaylistSorter({
             <span className="w-6 shrink-0 text-right text-sm text-zinc-400">
               {index + 1}
             </span>
-            <span className="flex-1 truncate">{video.title}</span>
+            <span className="flex flex-1 items-center gap-2 overflow-hidden">
+              {editingId === video.playlistItemId ? (
+                <input
+                  autoFocus
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    } else if (e.key === "Escape") {
+                      cancelEditingTitle(video);
+                    }
+                  }}
+                  onBlur={() => submitRename(video)}
+                  className="w-full rounded border border-black/[.08] bg-transparent px-1 py-0.5 text-sm dark:border-white/[.145]"
+                />
+              ) : (
+                <>
+                  <span className="truncate">{video.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => startEditingTitle(video)}
+                    disabled={renamingVideoId === video.videoId}
+                    className="shrink-0 text-zinc-400 hover:text-zinc-600 disabled:opacity-40 dark:text-zinc-500 dark:hover:text-zinc-300"
+                    aria-label={`Rename "${video.title}"`}
+                    title="Rename video"
+                  >
+                    {renamingVideoId === video.videoId ? "Saving..." : "✏️"}
+                  </button>
+                </>
+              )}
+            </span>
             <span className="w-28 shrink-0 text-right text-sm text-zinc-500 dark:text-zinc-400">
               {formatDate(video.addedAt)}
             </span>
