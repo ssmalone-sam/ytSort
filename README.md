@@ -75,7 +75,25 @@ npm test
 ## Notes on YouTube API quota
 
 Moving one video within a playlist (`playlistItems.update`) costs 50 quota
-units against a default 10,000/day project quota - about 200 moves/day. The
-sort screen shows how many videos actually need to move before you apply a
-sort (it only moves items that are out of place), and the count next to
-"Apply sort" is a rough estimate of the quota it will use.
+units against a default 10,000/day project quota - about 200 moves/day.
+Renaming a video costs 51 (1 to read its current title, 50 to write the new
+one), and the one-time-per-visit check of whether a playlist's sort order is
+set to Manual costs 50-100. The sort screen shows how many videos actually
+need to move before you apply a sort (it only moves items that are out of
+place), and the count next to "Apply sort" is a rough estimate of the quota
+it will use.
+
+This quota is tied to the **Google Cloud project** (i.e. this app's OAuth
+client), not to whichever Google account is signed in - everyone who uses
+ytSort against the same project shares one 10,000/day pool. It resets at
+midnight Pacific Time; there's no way to check current usage from within the
+app (Google doesn't expose it via the API), only in Google Cloud Console
+under APIs & Services -> YouTube Data API v3 -> Quotas.
+
+If 10,000/day becomes a real constraint (heavy use, or opening ytSort up to
+more people), you can request a quota increase: Google Cloud Console ->
+APIs & Services -> YouTube Data API v3 -> Quotas, select the "Queries per
+day" quota, and use "Edit Quotas" to submit a request. It's a manual review
+by Google (not instant), and you'll need to explain what the app does and
+why it needs more - being a small personal/friends tool is fine to state,
+but expect it to take anywhere from a few days to longer.
